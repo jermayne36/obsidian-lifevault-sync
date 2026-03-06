@@ -54,3 +54,20 @@
   background-color: var(--background-modifier-error);
   color: var(--text-error);
 }
+
+.lifevault-plan-info {
+  padding: 10px 14px;
+  margin: 8px 0;
+  border-radius: 6px;
+  background-color: var(--background-secondary);
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.lifevault-plan-info p {
+  margin: 0 0 4px 0;
+  font-size: 0.9em;
+}
+
+.lifevault-plan-info p:last-child {
+  margin-bottom: 0;
+}

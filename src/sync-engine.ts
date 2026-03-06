@@ -1,11 +1,10 @@
-import { Vault, TFile, TFolder, Notice } from 'obsidian';
+import { Vault, TFile, Notice } from 'obsidian';
 import { LifeVaultApiClient } from './api-client';
 import type {
   LifeVaultSyncSettings,
   SyncManifest,
   SyncFileState,
   ObsidianProvenance,
-  LifeVaultNote,
 } from './types';
 
 /** MIME types for common Obsidian file extensions */
@@ -34,33 +33,15 @@ function getMimeType(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] ?? 'application/octet-stream';
 }
 
-/** Compute SHA-256 hex hash of a string */
-async function hashString(content: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return arrayBufferToHex(hashBuffer);
-}
-
 /** Compute SHA-256 hex hash of an ArrayBuffer */
 async function hashArrayBuffer(data: ArrayBuffer): Promise<string> {
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return arrayBufferToHex(hashBuffer);
-}
-
-function arrayBufferToHex(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
+  const bytes = new Uint8Array(hashBuffer);
   const hex: string[] = [];
   for (let i = 0; i < bytes.length; i++) {
     hex.push(bytes[i].toString(16).padStart(2, '0'));
   }
   return hex.join('');
-}
-
-/** Extract note title from a markdown file path */
-function titleFromPath(relativePath: string): string {
-  const basename = relativePath.split('/').pop() ?? relativePath;
-  return basename.replace(/\.md$/, '');
 }
 
 export interface SyncProgress {
@@ -78,6 +59,8 @@ export class SyncEngine {
   private settings: LifeVaultSyncSettings;
   private manifest: SyncManifest;
   private isSyncing = false;
+  /** Cached remote items keyed by name (lowercase) for dedup */
+  private remoteItemsByName: Map<string, { itemId: string; updatedAt: string }> | null = null;
 
   constructor(
     vault: Vault,
@@ -111,7 +94,6 @@ export class SyncEngine {
     let errors = 0;
 
     try {
-      // 1. Scan local vault
       const report = (phase: SyncProgress['phase'], total: number, completed: number, currentFile: string) => {
         onProgress?.({ phase, total, completed, currentFile });
       };
@@ -119,10 +101,16 @@ export class SyncEngine {
       report('scanning', 0, 0, '');
       const localFiles = this.getLocalFiles();
       const totalFiles = localFiles.length;
+      const manifestEntryCount = Object.keys(this.manifest.files).length;
+
+      console.log(`[LifeVault Sync] Found ${totalFiles} local files, manifest has ${manifestEntryCount} entries`);
 
       report('comparing', totalFiles, 0, '');
 
-      // 2. Compare each file against manifest and push changes
+      // Pre-fetch remote items to prevent duplicates
+      await this.loadRemoteIndex();
+      console.log(`[LifeVault Sync] Remote index: ${this.remoteItemsByName?.size ?? 0} items`);
+
       for (let i = 0; i < localFiles.length; i++) {
         const file = localFiles[i];
         const relativePath = file.path;
@@ -130,43 +118,72 @@ export class SyncEngine {
         report('uploading', totalFiles, i, relativePath);
 
         try {
-          const isMarkdown = file.extension === 'md';
-          const currentHash = isMarkdown
-            ? await hashString(await this.vault.read(file))
-            : await hashArrayBuffer(await this.vault.readBinary(file));
-
-          const existing = this.manifest.files[relativePath];
-
-          // Skip if hash unchanged since last sync
-          if (existing && existing.contentHash === currentHash) {
+          // Skip zero-byte files
+          if (file.stat.size === 0) {
+            console.log(`[LifeVault Sync] SKIP (zero-byte): ${relativePath}`);
             skipped++;
             continue;
           }
 
-          const provenance: ObsidianProvenance = {
-            source: 'obsidian-plugin',
-            obsidianVault: this.getVaultName(),
-            relativePath,
-            contentHash: currentHash,
-            syncedAt: new Date().toISOString(),
-          };
+          // Hash the file content (all files read as binary)
+          const data = await this.vault.readBinary(file);
+          const currentHash = await hashArrayBuffer(data);
 
-          if (isMarkdown) {
-            await this.pushMarkdownFile(file, relativePath, existing, provenance);
-          } else {
-            await this.pushBinaryFile(file, relativePath, existing, provenance);
+          let existing = this.manifest.files[relativePath];
+
+          // If no manifest entry, try to recover from remote index by filename
+          if (!existing?.remoteId && this.remoteItemsByName) {
+            const match = this.remoteItemsByName.get(file.name.toLowerCase());
+            if (match) {
+              existing = {
+                relativePath,
+                contentHash: '',
+                remoteId: match.itemId,
+                remoteType: 'item',
+                lastSyncedAt: '',
+                remoteMtime: match.updatedAt,
+              };
+              this.manifest.files[relativePath] = existing;
+            }
           }
+
+          // Skip if hash unchanged since last sync AND previous upload succeeded
+          if (existing && existing.contentHash === currentHash && existing.remoteId) {
+            console.log(`[LifeVault Sync] SKIP (unchanged): ${relativePath} → ${existing.remoteId}`);
+            skipped++;
+            continue;
+          }
+
+          // Upload the file
+          const mimeType = getMimeType(file.extension);
+          const init = await this.api.initUpload(
+            this.settings.vaultId,
+            file.name,
+            data.byteLength,
+            mimeType,
+          );
+
+          const item = await this.api.uploadFile(init.uploadId, data, mimeType);
 
           // Update manifest
           this.manifest.files[relativePath] = {
             relativePath,
             contentHash: currentHash,
-            remoteId: this.manifest.files[relativePath]?.remoteId ?? '',
-            remoteType: isMarkdown ? 'note' : 'item',
-            lastSyncedAt: provenance.syncedAt,
-            remoteMtime: provenance.syncedAt,
+            remoteId: item.itemId,
+            remoteType: 'item',
+            lastSyncedAt: new Date().toISOString(),
+            remoteMtime: item.updatedAt,
           };
 
+          // Update remote index
+          if (this.remoteItemsByName) {
+            this.remoteItemsByName.set(file.name.toLowerCase(), {
+              itemId: item.itemId,
+              updatedAt: item.updatedAt,
+            });
+          }
+
+          console.log(`[LifeVault Sync] UPLOADED: ${relativePath} → ${item.itemId}`);
           uploaded++;
         } catch (err) {
           console.error(`[LifeVault Sync] Failed to sync ${relativePath}:`, err);
@@ -174,19 +191,11 @@ export class SyncEngine {
         }
       }
 
-      // 3. Handle deletions — files in manifest but no longer local
+      // Handle deletions — files in manifest but no longer local
       const localPaths = new Set(localFiles.map((f) => f.path));
-      for (const [path, state] of Object.entries(this.manifest.files)) {
+      for (const [path] of Object.entries(this.manifest.files)) {
         if (!localPaths.has(path)) {
-          try {
-            if (state.remoteType === 'note') {
-              await this.api.deleteNote(this.settings.vaultId, state.remoteId);
-            }
-            // VaultItems use soft-delete — skip for now to be safe
-            delete this.manifest.files[path];
-          } catch (err) {
-            console.error(`[LifeVault Sync] Failed to delete remote ${path}:`, err);
-          }
+          delete this.manifest.files[path];
         }
       }
 
@@ -194,9 +203,28 @@ export class SyncEngine {
       report('done', totalFiles, totalFiles, '');
     } finally {
       this.isSyncing = false;
+      this.remoteItemsByName = null;
     }
 
     return { uploaded, skipped, errors };
+  }
+
+  /** Fetch existing remote items to prevent creating duplicates */
+  private async loadRemoteIndex(): Promise<void> {
+    try {
+      const items = await this.api.listItems(this.settings.vaultId);
+      this.remoteItemsByName = new Map();
+      for (const item of items) {
+        const key = (item.name ?? '').toLowerCase();
+        const existing = this.remoteItemsByName.get(key);
+        if (!existing || item.updatedAt > existing.updatedAt) {
+          this.remoteItemsByName.set(key, { itemId: item.itemId, updatedAt: item.updatedAt });
+        }
+      }
+    } catch (err) {
+      console.warn('[LifeVault Sync] Could not load remote items index:', err);
+      this.remoteItemsByName = null;
+    }
   }
 
   // ── Private helpers ─────────────────────────────────────────
@@ -216,16 +244,11 @@ export class SyncEngine {
   }
 
   private shouldSync(path: string): boolean {
-    // Always exclude plugin's own data
     if (path.startsWith('.obsidian/plugins/lifevault-sync/')) return false;
-
-    // Exclude .obsidian/ unless opted in
     if (!this.settings.syncConfigFolder && path.startsWith('.obsidian/')) return false;
-
-    // Exclude trash
     if (path.startsWith('.trash/')) return false;
+    if (path.endsWith('.base')) return false;
 
-    // Check user exclude patterns
     for (const pattern of this.settings.excludePatterns) {
       if (this.matchGlob(path, pattern)) return false;
     }
@@ -234,80 +257,11 @@ export class SyncEngine {
   }
 
   private matchGlob(path: string, pattern: string): boolean {
-    // Simple glob matching — supports * and **
     const regex = pattern
       .replace(/\./g, '\\.')
       .replace(/\*\*/g, '{{DOUBLESTAR}}')
       .replace(/\*/g, '[^/]*')
       .replace(/\{\{DOUBLESTAR\}\}/g, '.*');
     return new RegExp(`^${regex}$`).test(path);
-  }
-
-  private async pushMarkdownFile(
-    file: TFile,
-    relativePath: string,
-    existing: SyncFileState | undefined,
-    provenance: ObsidianProvenance,
-  ): Promise<void> {
-    const content = await this.vault.read(file);
-    const title = titleFromPath(relativePath);
-
-    if (existing?.remoteId && existing.remoteType === 'note') {
-      // Update existing note
-      const updated = await this.api.updateNote(
-        this.settings.vaultId,
-        existing.remoteId,
-        title,
-        content,
-        provenance,
-      );
-      this.manifest.files[relativePath] = {
-        ...this.manifest.files[relativePath],
-        remoteId: updated.noteId,
-        remoteMtime: updated.updatedAt,
-      };
-    } else {
-      // Create new note
-      const created = await this.api.createNote(
-        this.settings.vaultId,
-        title,
-        content,
-        provenance,
-      );
-      this.manifest.files[relativePath] = {
-        ...this.manifest.files[relativePath],
-        remoteId: created.noteId,
-        remoteType: 'note',
-        remoteMtime: created.updatedAt,
-      };
-    }
-  }
-
-  private async pushBinaryFile(
-    file: TFile,
-    relativePath: string,
-    existing: SyncFileState | undefined,
-    provenance: ObsidianProvenance,
-  ): Promise<void> {
-    const data = await this.vault.readBinary(file);
-    const mimeType = getMimeType(file.extension);
-
-    // For binary files, we always upload a new version
-    // (LifeVault items don't have an update endpoint — upload replaces)
-    const init = await this.api.initUpload(
-      this.settings.vaultId,
-      file.name,
-      data.byteLength,
-      mimeType,
-    );
-
-    const item = await this.api.uploadFile(init.uploadId, data, mimeType);
-
-    this.manifest.files[relativePath] = {
-      ...this.manifest.files[relativePath],
-      remoteId: item.itemId,
-      remoteType: 'item',
-      remoteMtime: item.updatedAt,
-    };
   }
 }

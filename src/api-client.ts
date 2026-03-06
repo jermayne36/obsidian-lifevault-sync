@@ -44,14 +44,23 @@ export class LifeVaultApiClient {
 
   async me(): Promise<LoginResponse['user']> {
     const res = await this.request('GET', '/auth/me');
-    return res.json as LoginResponse['user'];
+    const data = res.json;
+    // API returns { user: { ... } }
+    return ((data as { user?: LoginResponse['user'] }).user ?? data) as LoginResponse['user'];
   }
 
   // ── Vaults ────────────────────────────────────────────────
 
   async listVaults(): Promise<LifeVaultVault[]> {
     const res = await this.request('GET', '/vaults');
-    return res.json as LifeVaultVault[];
+    const data = res.json;
+    // API returns { items: [...] } — normalize to array
+    const raw: Record<string, unknown>[] = Array.isArray(data) ? data : (data as { items: Record<string, unknown>[] }).items ?? [];
+    // Normalize vaultId → id
+    return raw.map((v) => ({
+      ...v,
+      id: (v.id ?? v.vaultId) as string,
+    })) as LifeVaultVault[];
   }
 
   async createVault(name: string, description: string): Promise<LifeVaultVault> {
@@ -60,7 +69,8 @@ export class LifeVaultApiClient {
       description,
       vaultType: 'standard',
     });
-    return res.json as LifeVaultVault;
+    const v = res.json as Record<string, unknown>;
+    return { ...v, id: (v.id ?? v.vaultId) as string } as LifeVaultVault;
   }
 
   // ── Notes (for .md files) ─────────────────────────────────
@@ -115,7 +125,11 @@ export class LifeVaultApiClient {
   async listItems(vaultId: string): Promise<LifeVaultItem[]> {
     const res = await this.request('GET', `/items?vaultId=${vaultId}`);
     const data = res.json;
-    return (Array.isArray(data) ? data : (data as { items: LifeVaultItem[] }).items ?? []) as LifeVaultItem[];
+    const raw: Record<string, unknown>[] = Array.isArray(data) ? data : (data as { items: Record<string, unknown>[] }).items ?? [];
+    return raw.map((item) => ({
+      ...item,
+      itemId: (item.itemId ?? item.id) as string,
+    })) as LifeVaultItem[];
   }
 
   async initUpload(
@@ -143,7 +157,11 @@ export class LifeVaultApiClient {
       },
       body: data,
     });
-    return res.json as LifeVaultItem;
+    const raw = res.json as Record<string, unknown>;
+    return {
+      ...raw,
+      itemId: (raw.itemId ?? raw.id) as string,
+    } as LifeVaultItem;
   }
 
   async downloadGrant(vaultId: string, itemId: string): Promise<DownloadGrantResponse> {

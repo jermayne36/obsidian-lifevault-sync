@@ -97,6 +97,15 @@ export default class LifeVaultSyncPlugin extends Plugin {
     });
   }
 
+  /** Clear the sync manifest (e.g. when the target vault changes) */
+  async clearSyncManifest(): Promise<void> {
+    // Clear in-place so the SyncEngine's reference stays valid
+    for (const key of Object.keys(this.syncManifest.files)) {
+      delete this.syncManifest.files[key];
+    }
+    await this.saveManifest();
+  }
+
   private async loadManifest(): Promise<void> {
     const data = await this.loadData();
     this.syncManifest = data?.syncManifest ?? { files: {} };

@@ -4,6 +4,8 @@ export interface LifeVaultSyncSettings {
   apiUrl: string;
   /** User email for login */
   email: string;
+  /** User's subscription tier (free, pro, premium, family) */
+  tier: string;
   /** Stored JWT (not the password — we login and store the token) */
   accessToken: string;
   /** Token expiry ISO string */
@@ -23,8 +25,9 @@ export interface LifeVaultSyncSettings {
 }
 
 export const DEFAULT_SETTINGS: LifeVaultSyncSettings = {
-  apiUrl: 'https://lifevault-v2-api.vercel.app/api',
+  apiUrl: 'https://api.lifevaultsecure.com/api',
   email: '',
+  tier: 'free',
   accessToken: '',
   tokenExpiresAt: '',
   vaultId: '',
@@ -120,4 +123,27 @@ export interface InitUploadResponse {
 export interface DownloadGrantResponse {
   downloadUrl: string;
   expiresAt: string;
+}
+
+/** Tier limits mirrored from BILLING_TIER_DEFINITIONS */
+export interface TierLimits {
+  displayName: string;
+  maxVaults: number;       // -1 = unlimited
+  storageLimitMB: number;
+}
+
+export const TIER_LIMITS: Record<string, TierLimits> = {
+  free:    { displayName: 'Free',    maxVaults: 8,  storageLimitMB: 256 },
+  pro:     { displayName: 'Pro',     maxVaults: 40, storageLimitMB: 5120 },
+  premium: { displayName: 'Premium', maxVaults: -1, storageLimitMB: 15360 },
+  family:  { displayName: 'Family',  maxVaults: -1, storageLimitMB: 30720 },
+};
+
+export function getTierLimits(tier: string): TierLimits {
+  return TIER_LIMITS[tier.toLowerCase()] ?? TIER_LIMITS.free;
+}
+
+export function formatStorage(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(0)} GB`;
+  return `${mb} MB`;
 }
