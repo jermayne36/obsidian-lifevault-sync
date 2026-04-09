@@ -3,7 +3,7 @@
   "name": "LifeVault Sync",
   "version": "0.1.0",
   "minAppVersion": "0.15.0",
-  "description": "Sync your Obsidian vault with LifeVault — encrypted cloud backup for your notes and files.",
+  "description": "Sync your vault with LifeVault — encrypted cloud backup for your notes and files.",
   "author": "LifeVault",
   "authorUrl": "https://www.lifevaultsecure.com",
   "isDesktopOnly": false

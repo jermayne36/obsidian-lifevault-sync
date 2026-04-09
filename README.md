@@ -1,6 +1,6 @@
 # LifeVault Sync for Obsidian
 
-Sync your Obsidian vault with [LifeVault](https://www.lifevaultsecure.com) — encrypted cloud backup for your notes and files.
+Sync your vault with [LifeVault](https://www.lifevaultsecure.com) — encrypted cloud backup for your notes and files.
 
 ## Features
 

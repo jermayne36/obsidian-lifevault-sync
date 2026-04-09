@@ -1,7 +1,7 @@
 {
   "name": "obsidian-lifevault-sync",
   "version": "0.1.0",
-  "description": "Obsidian plugin to sync your vault with LifeVault",
+  "description": "Plugin to sync your vault with LifeVault — encrypted cloud backup for your notes and files",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
