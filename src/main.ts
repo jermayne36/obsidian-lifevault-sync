@@ -36,7 +36,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
     this.addSettingTab(new LifeVaultSyncSettingTab(this.app, this));
 
     // Ribbon icon — cloud upload
-    this.addRibbonIcon('cloud', 'LifeVault Sync', async () => {
+    this.addRibbonIcon('cloud', 'LifeVault sync', async () => {
       if (!this.settings.accessToken) {
         new Notice('Please log in to LifeVault first (Settings > LifeVault Sync)');
         return;
@@ -50,7 +50,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
 
     // Command: Sync Now
     this.addCommand({
-      id: 'lifevault-sync-now',
+      id: 'sync-now',
       name: 'Sync now — push to LifeVault',
       callback: async () => {
         await this.runSync();
@@ -60,7 +60,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
     // Command: Open settings
     this.addCommand({
       id: 'lifevault-open-settings',
-      name: 'Open LifeVault Sync settings',
+      name: 'Open settings',
       callback: () => {
         const setting = (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting;
         setting.open();
@@ -75,12 +75,12 @@ export default class LifeVaultSyncPlugin extends Plugin {
     // Auto-sync
     this.setupAutoSync();
 
-    console.log('[LifeVault Sync] Plugin loaded');
+    console.debug('[LifeVault Sync] Plugin loaded');
   }
 
   onunload(): void {
     this.clearAutoSync();
-    console.log('[LifeVault Sync] Plugin unloaded');
+    console.debug('[LifeVault Sync] Plugin unloaded');
   }
 
   // ── Settings persistence ──────────────────────────────────
@@ -165,7 +165,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
       const intervalMs = this.settings.autoSyncMinutes * 60 * 1000;
       this.autoSyncIntervalId = this.registerInterval(
         window.setInterval(() => {
-          this.runSync();
+          void this.runSync();
         }, intervalMs),
       ) as unknown as number;
     }

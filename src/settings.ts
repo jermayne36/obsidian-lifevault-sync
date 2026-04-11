@@ -16,7 +16,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'LifeVault Sync' });
+    new Setting(containerEl).setName('LifeVault sync').setHeading();
 
     // ── Connection Status ───────────────────────────────────
     const isConnected = !!this.plugin.settings.accessToken;
@@ -114,7 +114,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
   private renderSyncSettings(containerEl: HTMLElement): void {
     if (!this.plugin.settings.vaultId) return;
 
-    containerEl.createEl('h3', { text: 'Sync Settings' });
+    new Setting(containerEl).setName('Sync settings').setHeading();
 
     new Setting(containerEl)
       .setName('Auto-sync interval')
@@ -132,7 +132,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Sync .obsidian/ folder')
+      .setName(`Sync ${this.app.vault.configDir}/ folder`)
       .setDesc('Include Obsidian config (themes, snippets, hotkeys). Excludes plugin binaries.')
       .addToggle((toggle) =>
         toggle
@@ -171,7 +171,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
       .setDesc('Push local changes to LifeVault')
       .addButton((btn) =>
         btn
-          .setButtonText('Sync Now')
+          .setButtonText('Sync now')
           .setCta()
           .onClick(async () => {
             await this.plugin.runSync();
@@ -193,7 +193,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
         }),
       );
 
-    const passwordSetting = new Setting(loginContainer)
+    new Setting(loginContainer)
       .setName('Password')
       .addText((text) => {
         text.setPlaceholder('Password').onChange((value) => {

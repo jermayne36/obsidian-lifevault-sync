@@ -1,10 +1,8 @@
-import { Vault, TFile, Notice } from 'obsidian';
+import { Vault, TFile } from 'obsidian';
 import { LifeVaultApiClient } from './api-client';
 import type {
   LifeVaultSyncSettings,
   SyncManifest,
-  SyncFileState,
-  ObsidianProvenance,
 } from './types';
 
 /** MIME types for common Obsidian file extensions */
@@ -103,13 +101,13 @@ export class SyncEngine {
       const totalFiles = localFiles.length;
       const manifestEntryCount = Object.keys(this.manifest.files).length;
 
-      console.log(`[LifeVault Sync] Found ${totalFiles} local files, manifest has ${manifestEntryCount} entries`);
+      console.debug(`[LifeVault Sync] Found ${totalFiles} local files, manifest has ${manifestEntryCount} entries`);
 
       report('comparing', totalFiles, 0, '');
 
       // Pre-fetch remote items to prevent duplicates
       await this.loadRemoteIndex();
-      console.log(`[LifeVault Sync] Remote index: ${this.remoteItemsByName?.size ?? 0} items`);
+      console.debug(`[LifeVault Sync] Remote index: ${this.remoteItemsByName?.size ?? 0} items`);
 
       for (let i = 0; i < localFiles.length; i++) {
         const file = localFiles[i];
@@ -120,7 +118,7 @@ export class SyncEngine {
         try {
           // Skip zero-byte files
           if (file.stat.size === 0) {
-            console.log(`[LifeVault Sync] SKIP (zero-byte): ${relativePath}`);
+            console.debug(`[LifeVault Sync] SKIP (zero-byte): ${relativePath}`);
             skipped++;
             continue;
           }
@@ -149,7 +147,7 @@ export class SyncEngine {
 
           // Skip if hash unchanged since last sync AND previous upload succeeded
           if (existing && existing.contentHash === currentHash && existing.remoteId) {
-            console.log(`[LifeVault Sync] SKIP (unchanged): ${relativePath} → ${existing.remoteId}`);
+            console.debug(`[LifeVault Sync] SKIP (unchanged): ${relativePath} → ${existing.remoteId}`);
             skipped++;
             continue;
           }
@@ -183,7 +181,7 @@ export class SyncEngine {
             });
           }
 
-          console.log(`[LifeVault Sync] UPLOADED: ${relativePath} → ${item.itemId}`);
+          console.debug(`[LifeVault Sync] UPLOADED: ${relativePath} → ${item.itemId}`);
           uploaded++;
         } catch (err) {
           console.error(`[LifeVault Sync] Failed to sync ${relativePath}:`, err);
@@ -244,8 +242,8 @@ export class SyncEngine {
   }
 
   private shouldSync(path: string): boolean {
-    if (path.startsWith('.obsidian/plugins/lifevault-sync/')) return false;
-    if (!this.settings.syncConfigFolder && path.startsWith('.obsidian/')) return false;
+    if (path.startsWith(`${this.vault.configDir}/plugins/lifevault-sync/`)) return false;
+    if (!this.settings.syncConfigFolder && path.startsWith(`${this.vault.configDir}/`)) return false;
     if (path.startsWith('.trash/')) return false;
     if (path.endsWith('.base')) return false;
 
