@@ -16,8 +16,6 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl).setName('LifeVault sync').setHeading();
-
     // ── Connection Status ───────────────────────────────────
     const isConnected = !!this.plugin.settings.accessToken;
     const statusEl = containerEl.createDiv({
@@ -31,8 +29,8 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
 
     // ── API URL ─────────────────────────────────────────────
     new Setting(containerEl)
-      .setName('API URL')
-      .setDesc('LifeVault API endpoint. Change only for development.')
+      .setName('Server endpoint')
+      .setDesc('API endpoint. Change only for development.')
       .addText((text) =>
         text
           .setPlaceholder('https://api.lifevaultsecure.com/api')
@@ -80,7 +78,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
             this.plugin.settings.vaultName = '';
             this.plugin.api.setToken('');
             await this.plugin.saveSettings();
-            new Notice('Logged out of LifeVault');
+            new Notice('Logged out');
             this.display();
           }),
         );
@@ -114,7 +112,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
   private renderSyncSettings(containerEl: HTMLElement): void {
     if (!this.plugin.settings.vaultId) return;
 
-    new Setting(containerEl).setName('Sync settings').setHeading();
+    new Setting(containerEl).setName('Sync').setHeading();
 
     new Setting(containerEl)
       .setName('Auto-sync interval')
@@ -168,7 +166,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Sync now')
-      .setDesc('Push local changes to LifeVault')
+      .setDesc('Push local changes to the cloud')
       .addButton((btn) =>
         btn
           .setButtonText('Sync now')
@@ -206,7 +204,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
     new Setting(loginContainer)
       .addButton((btn) =>
         btn
-          .setButtonText('Log in to LifeVault')
+          .setButtonText('Log in')
           .setCta()
           .onClick(async () => {
             if (!emailValue || !passwordValue) {
@@ -237,7 +235,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
               console.error('[LifeVault Sync] Login failed:', err);
               new Notice('Login failed — check your email and password');
               btn.setDisabled(false);
-              btn.setButtonText('Log in to LifeVault');
+              btn.setButtonText('Log in');
             }
           }),
       );
@@ -295,7 +293,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
 
     new Setting(container)
       .setName('Target vault')
-      .setDesc('Select which LifeVault to sync with')
+      .setDesc('Select which vault to sync with')
       .addDropdown((dropdown) =>
         dropdown
           .addOptions(vaultOptions)
@@ -328,14 +326,14 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
       const remainingText = limits.maxVaults === -1
         ? ''
         : ` (${currentVaultCount}/${limits.maxVaults} used)`;
-      let newVaultName = 'Obsidian Backup';
+      let newVaultName = 'Obsidian backup';
 
       new Setting(container)
         .setName('Or create a new vault')
         .setDesc(`Create a dedicated vault for your Obsidian backup${remainingText}`)
         .addText((text) =>
           text
-            .setPlaceholder('Obsidian Backup')
+            .setPlaceholder('Obsidian backup')
             .setValue(newVaultName)
             .onChange((value) => {
               newVaultName = value.trim();
@@ -343,7 +341,7 @@ export class LifeVaultSyncSettingTab extends PluginSettingTab {
         )
         .addButton((btn) =>
           btn.setButtonText('Create').setCta().onClick(async () => {
-            const name = newVaultName || 'Obsidian Backup';
+            const name = newVaultName || 'Obsidian backup';
 
             // Check for duplicate name
             const duplicate = this.vaults.find(

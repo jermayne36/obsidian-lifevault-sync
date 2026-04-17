@@ -36,13 +36,13 @@ export default class LifeVaultSyncPlugin extends Plugin {
     this.addSettingTab(new LifeVaultSyncSettingTab(this.app, this));
 
     // Ribbon icon — cloud upload
-    this.addRibbonIcon('cloud', 'LifeVault sync', async () => {
+    this.addRibbonIcon('cloud', 'Sync', async () => {
       if (!this.settings.accessToken) {
-        new Notice('Please log in to LifeVault first (Settings > LifeVault Sync)');
+        new Notice('Please log in first in settings');
         return;
       }
       if (!this.settings.vaultId) {
-        new Notice('Please select a target vault (Settings > LifeVault Sync)');
+        new Notice('Please select a target vault in settings');
         return;
       }
       await this.runSync();
@@ -51,7 +51,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
     // Command: Sync Now
     this.addCommand({
       id: 'sync-now',
-      name: 'Sync now — push to LifeVault',
+      name: 'Sync now',
       callback: async () => {
         await this.runSync();
       },
@@ -122,7 +122,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
 
   async runSync(): Promise<void> {
     if (!this.settings.accessToken || !this.settings.vaultId) {
-      new Notice('LifeVault Sync: Please configure your account and vault first');
+      new Notice('Please configure your account and vault first');
       return;
     }
 
@@ -131,7 +131,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
       return;
     }
 
-    new Notice('LifeVault Sync: Starting...');
+    new Notice('Starting sync...');
     this.updateStatusBar('Syncing...');
 
     try {
@@ -145,13 +145,13 @@ export default class LifeVaultSyncPlugin extends Plugin {
       this.syncManifest = this.syncEngine.getManifest();
       await this.saveManifest();
 
-      const msg = `LifeVault Sync complete: ${result.uploaded} uploaded, ${result.skipped} unchanged` +
+      const msg = `Sync complete: ${result.uploaded} uploaded, ${result.skipped} unchanged` +
         (result.errors > 0 ? `, ${result.errors} errors` : '');
       new Notice(msg);
       this.updateStatusBar();
     } catch (err) {
       console.error('[LifeVault Sync] Sync failed:', err);
-      new Notice('LifeVault Sync failed — check console for details');
+      new Notice('Sync failed — check console for details');
       this.updateStatusBar('Sync failed');
     }
   }
@@ -189,7 +189,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
     }
 
     if (!this.settings.accessToken) {
-      this.statusBarEl.setText('LV: Not connected');
+      this.statusBarEl.setText('LV: not connected');
       return;
     }
 
@@ -197,7 +197,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
       const ago = this.timeAgo(new Date(this.settings.lastSyncAt));
       this.statusBarEl.setText(`LV: Synced ${ago}`);
     } else {
-      this.statusBarEl.setText('LV: Ready');
+      this.statusBarEl.setText('LV: ready');
     }
   }
 
@@ -222,7 +222,7 @@ export default class LifeVaultSyncPlugin extends Plugin {
     this.api.setToken('');
     await this.saveSettings();
     this.updateStatusBar('Session expired');
-    new Notice('LifeVault session expired — please log in again in Settings');
+    new Notice('Session expired — please log in again in settings');
     return '';
   }
 }
